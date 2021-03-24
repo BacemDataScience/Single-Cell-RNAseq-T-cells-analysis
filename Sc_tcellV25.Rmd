@@ -1,0 +1,1073 @@
+---
+title: "Seurat - Guided Clustering Tutorial"
+output:
+  html_document:
+    df_print: kable
+    theme: united
+  word_document: default
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+---
+***
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  tidy = TRUE,
+  tidy.opts = list(width.cutoff = 120),
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+### Setup the Seurat Object
+
+For this tutorial, we will be analyzing the a dataset of Peripheral Blood Mononuclear Cells (PBMC) freely available from 10X Genomics. There are 2,700 single cells that were sequenced on the Illumina NextSeq 500. The raw data can be found [here](https://s3-us-west-2.amazonaws.com/10x.files/samples/cell/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz).
+
+We start by reading in the data. The `Read10X` function reads in the output of the [cellranger](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/what-is-cell-ranger) pipeline from 10X, returning a unique molecular identified (UMI) count matrix. The values in this matrix represent the number of molecules for each feature (i.e. gene; row) that are detected in each cell (column).
+
+We next use the count matrix to create a `Seurat` object. The object serves as a container that contains both data (like the count matrix) and analysis (like PCA, or clustering results) for a single-cell dataset. For a technical discussion of the `Seurat` object structure, check out our [GitHub Wiki](https://github.com/satijalab/seurat/wiki). For example, the count matrix is stored in `pbmc[["RNA"]]@counts`.
+
+```{r init}
+library(monocle3)
+library(Seurat)
+library(SeuratData)
+library(SeuratWrappers)
+library(ggplot2)
+library(patchwork) 
+library(magrittr)
+library(dplyr)
+library(Seurat)
+library(monocle)
+library(slingshot)
+library(BUSpaRse)
+library(tidyverse)
+library(tidymodels)
+library(scales)
+library(viridis)
+library(Matrix)
+library(clustree)
+
+#panc.data<- read.csv(file = "../data/cancer/pancreatic/CRA001160.txt" ,sep = " ", header = TRUE,  row.names = NULL)
+#panc <- CreateSeuratObject(counts = panc.data, project = "CRA001160", min.cells = 3, min.features = 200)
+#panc$typee <- readLines(con = "../data/cancer/pancreatic/celltype.txt")
+#unique(panc$typee)
+
+library(monocle3)
+library(Seurat)
+library(SeuratData)
+library(SeuratWrappers)
+library(ggplot2)
+library(patchwork)
+library(magrittr)
+
+# DimPlot(object = both, reduction = 'umap', label = TRUE, pt.size = 0.5) + NoLegend() DimPlot(object =
+# RenameIdents(object = both, new.cluster.ids), reduction = 'umap', label = TRUE, pt.size = 0.5) + NoLegend()
+
+
+
+#both<- MergeSeurat(object1 = swctl, object2 = swoe, add.cell.id1 = "swctl", add.cell.id2 = "swoe",                project = "SWCTL_SWOE")
+#both<- merge(swctl, y = swoe, add.cell.ids = c("swctl", "swoe"), project = "SWCTL-SWOE")
+
+both <- readRDS("./Sc_tcellV24.rds" )
+#both
+#both <- CreateSeuratObject(counts = both.data, project = "SWCTL_SWOE", min.cells = 3, min.features = 200)
+
+#both
+#both <- CreateSeuratObject(counts = both.data, project = "SWCTL_SWOE", min.cells = 3, min.features = 200)
+
+
+both.markers <- FindAllMarkers(object = both, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+both.markers$ratio_pct1_pct2<-both.markers$pct.1/both.markers$pct.2
+both.markers %>% group_by(cluster) %>% top_n(n = 20, wt = avg_logFC)
+list_genes <-both.markers %>% group_by(cluster) %>% top_n(n = 1, wt = avg_logFC)
+write.csv(both.markers %>% group_by(cluster) %>% top_n(n = 20, wt = avg_logFC), file = "genes_20TCELLperC_all.csv")
+write.csv(both.markers %>% group_by(cluster), file = "genes_TCELLperC_all.csv")
+both.markers2<-subset(both.markers,both.markers$pct.1>0.6)
+both.markers2<-both.markers2[order(-both.markers2$ratio_pct1_pct2),]
+write.csv(both.markers2 %>% group_by(cluster) %>% top_n(n = 20, wt = avg_logFC), file = "genes_20TCELLperC_modif_all.csv")
+DimPlot(object = both, pt.size=0.5,label = T,split.by = 'type')
+DimPlot(object = both,label = TRUE )
+
+VlnPlot(object = both, features = c(list_genes$gene), slot = 'counts', log = TRUE)
+
+VlnPlot(object = both, features = c(list_genes$gene[1]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[2]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[3]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[4]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[5]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[6]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[7]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[8]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[9]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[10]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[11]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[12]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[13]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[14]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[15]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[16]), slot = 'counts', log = TRUE)
+VlnPlot(object = both, features = c(list_genes$gene[17]), slot = 'counts', log = TRUE)
+
+
+FeaturePlot(object = both, features = c(list_genes$gene[1]))
+FeaturePlot(object = both, features = c(list_genes$gene[2]))
+FeaturePlot(object = both, features = c(list_genes$gene[3]))
+FeaturePlot(object = both, features = c(list_genes$gene[4]))
+FeaturePlot(object = both, features = c(list_genes$gene[5]))
+FeaturePlot(object = both, features = c(list_genes$gene[6]))
+FeaturePlot(object = both, features = c(list_genes$gene[7]))
+FeaturePlot(object = both, features = c(list_genes$gene[8]))
+FeaturePlot(object = both, features = c(list_genes$gene[9]))
+FeaturePlot(object = both, features = c(list_genes$gene[10]))
+FeaturePlot(object = both, features = c(list_genes$gene[11]))
+FeaturePlot(object = both, features = c(list_genes$gene[12]))
+FeaturePlot(object = both, features = c(list_genes$gene[13]))
+FeaturePlot(object = both, features = c(list_genes$gene[14]))
+FeaturePlot(object = both, features = c(list_genes$gene[15]))
+FeaturePlot(object = both, features = c(list_genes$gene[16]))
+FeaturePlot(object = both, features = c(list_genes$gene[17]))
+
+#list_genes2 <- list_genes[-c(14,18,20,21),]
+list_genes2 <- list_genes
+DotPlot(both, features = c(list_genes2$gene)) + RotatedAxis()
+FeaturePlot(both, features = c(list_genes$gene))
+
+
+
+FeaturePlot(object = both, features = c("FOXP3"))
+FeaturePlot(object = both, features = c("CD4"))
+FeaturePlot(object = both, features = c("CXCR3"))
+FeaturePlot(object = both, features = c("ENTPD1"))
+FeaturePlot(object = both, features = c("CCR8"))
+FeaturePlot(object = both, features = c("CTLA4"))
+FeaturePlot(object = both, features = c("IL2RA"))
+FeaturePlot(object = both, features = c("IL7R"))
+FeaturePlot(object = both, features = c("CXCL13"))
+FeaturePlot(object = both, features = c("LEF1"))
+FeaturePlot(object = both, features = c("FAM65B"))
+FeaturePlot(object = both, features = c("LAYN"))
+#both<- MergeSeurat(object1 = swctl, object2 = swoe, add.cell.id1 = "swctl", add.cell.id2 = "swoe",                project = "SWCTL_SWOE")
+#both<- merge(swctl, y = swoe, add.cell.ids = c("swctl", "swoe"), project = "SWCTL-SWOE")
+
+both
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(monocle3)
+library(Seurat)
+library(SeuratData)
+library(SeuratWrappers)
+library(ggplot2)
+library(patchwork)
+library(magrittr)
+
+# DimPlot(object = both, reduction = 'umap', label = TRUE, pt.size = 0.5) + NoLegend() DimPlot(object =
+# RenameIdents(object = both, new.cluster.ids), reduction = 'umap', label = TRUE, pt.size = 0.5) + NoLegend()
+
+DimPlot(object = both, pt.size=0.5,label = T,split.by = 'type')
+DimPlot(object = both,label = TRUE )
+breast1 <- subset(x = both, subset = type == "breast")
+DimPlot(object = breast1,label = TRUE )
+colo1 <- subset(x = both, subset = type == "colo")
+DimPlot(object = colo1,label = TRUE )
+liver1 <- subset(x = both, subset = type == "liver")
+DimPlot(object = liver1,label = TRUE )
+lung1 <- subset(x = both, subset = type == "lung")
+DimPlot(object = lung1,label = TRUE )
+panc1 <- subset(x = both, subset = type == "panc")
+DimPlot(object = panc1,label = TRUE )
+
+
+new.cluster.ids <- c('Naive', 'NKT','Treg', 'NKT', 'NKT', 'Cytotoxic', 'NKT', 'Thelper', 'NKT', 'NKT', 'Treg', 'Texh', 'NKT', 'NKT', 'NKT', 'Cytotoxic', 'Treg' )
+both1<-both
+names(x = new.cluster.ids) <- levels(x = both1)
+both1<- RenameIdents(object = both, new.cluster.ids)
+DimPlot(object = both1,label = TRUE )
+DimPlot(object = both1,label = TRUE ,split.by = 'type')
+
+breast1 <- subset(x = both1, subset = type == "breast")
+DimPlot(object = breast1,label = TRUE )
+write.csv(breast1$seurat_clusters, file ="breast.csv")
+colo1 <- subset(x = both1, subset = type == "colo")
+DimPlot(object = colo1,label = TRUE )
+write.csv(colo1$seurat_clusters, file ="colo.csv")
+liver1 <- subset(x = both1, subset = type == "liver")
+DimPlot(object = liver1,label = TRUE )
+write.csv(liver1$seurat_clusters, file ="liver.csv")
+lung1 <- subset(x = both1, subset = type == "lung")
+DimPlot(object = lung1,label = TRUE )
+write.csv(lung1$seurat_clusters, file ="lung.csv")
+
+panc1 <- subset(x = both1, subset = type == "panc")
+DimPlot(object = panc1,label = TRUE )
+write.csv(panc1$seurat_clusters, file ="panc.csv")
+
+
+#hcabm40k <- SplitObject(both, split.by = "type")
+#for (i in seq_along(hcabm40k)) {
+ #   hcabm40k[[i]] <- NormalizeData(hcabm40k[[i]]) %>% FindVariableFeatures()
+#}
+#features <- SelectIntegrationFeatures(hcabm40k)
+#for (i in seq_along(along.with = hcabm40k)) {
+ #   hcabm40k[[i]] <- ScaleData(hcabm40k[[i]], features = features) %>% RunPCA(features = features)
+#}
+#anchors <- FindIntegrationAnchors(hcabm40k, reference = 1, reduction = "rpca", dims = 1:30)
+#integrated <- IntegrateData(anchors, dims = 1:30)
+#integrated <- ScaleData(integrated)
+#integrated <- RunPCA(integrated)
+#integrated <- RunUMAP(integrated, dims = 1:30, reduction.name = "UMAP")
+#integrated <- FindNeighbors(integrated, dims = 1:30)
+#integrated <- FindClusters(integrated)
+#DimPlot(integrated, group.by = c("type", "ident"))
+#DimPlot(integrated, group.by = c("seurat_clusters"))
+# BOth
+
+cds <- as.cell_data_set(both)
+cds <- cluster_cells(cds)
+
+p1 <- plot_cells(cds, show_trajectory_graph = FALSE)
+p2 <- plot_cells(cds, color_cells_by = "partition", show_trajectory_graph = FALSE)
+wrap_plots(p1, p2)
+integrated.sub <- subset(as.Seurat(cds), monocle3_partitions == 1)
+cds <- as.cell_data_set(integrated.sub)
+cds <- learn_graph(cds)
+
+
+
+plot_cells(cds, label_groups_by_cluster = TRUE, label_leaves = TRUE, label_branch_points = TRUE)
+max.avp <- which.max(unlist(FetchData(integrated.sub, "ident")))
+max.avp <- colnames(integrated.sub)[max.avp]
+cds <- order_cells(cds, root_cells = max.avp)
+plot_cells(cds, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+    label_branch_points = FALSE)
+integrated.sub <- as.Seurat(cds)
+
+
+
+## Calculate size factors using built-in function in monocle3
+cds <- estimate_size_factors(cds)
+
+## Add gene names into CDS
+#cds@rowRanges@elementMetadata@listData[["gene_short_name"]] <- rownames(both[["RNA"]])
+#marker_test_res <- top_markers(cds)
+#top_specific_markers <- marker_test_res %>%  filter(fraction_expressing >= 0.10) %>%                            group_by(cell_group) %>%                            top_n(1, pseudo_R2)
+
+
+
+
+
+```
+Pseudo time breast
+```{r}
+DimPlot(object = breast1,label = TRUE )
+cdsbreast <- as.cell_data_set(breast1)
+cdsbreast <- cluster_cells(cdsbreast)
+p1breast <- plot_cells(cdsbreast, show_trajectory_graph = FALSE)
+p2breast <- plot_cells(cdsbreast, color_cells_by = "partition", show_trajectory_graph = FALSE)
+#wrap_plots(p1, p2)
+integrated.subbreast <- subset(as.Seurat(cdsbreast), monocle3_partitions == 1)
+cdsbreast <- as.cell_data_set(integrated.subbreast)
+cdsbreast <- learn_graph(cdsbreast)
+plot_cells(cdsbreast, label_groups_by_cluster = TRUE, label_leaves = TRUE, label_branch_points = TRUE)
+max.avp <- which.max(unlist(FetchData(integrated.subbreast, "ident")))
+max.avp <- colnames(integrated.subbreast)[max.avp]
+cdsbreast <- order_cells(cdsbreast, root_cells = max.avp)
+plot_cells(cdsbreast, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+    label_branch_points = FALSE)
+integrated.subbreast <- as.Seurat(cdsbreast)
+
+FeaturePlot(integrated.subbreast, "monocle3_pseudotime")
+VlnPlot(object = breast1, features = c(list_genes$gene), slot = 'counts', log = TRUE)
+
+VlnPlot(object = breast1, features = c(list_genes$gene[1]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[2]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[3]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[4]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[5]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[6]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[7]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[8]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[9]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[10]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[11]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[12]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[13]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[14]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[15]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[16]), slot = 'counts', log = TRUE)
+VlnPlot(object = breast1, features = c(list_genes$gene[17]), slot = 'counts', log = TRUE)
+
+
+FeaturePlot(object = breast1, features = c(list_genes$gene[1]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[2]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[3]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[4]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[5]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[6]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[7]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[8]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[9]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[10]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[11]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[12]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[13]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[14]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[15]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[16]))
+FeaturePlot(object = breast1, features = c(list_genes$gene[17]))
+
+#list_genes2 <- list_genes[-c(14,18,20,21),]
+list_genes2 <- list_genes
+DotPlot(breast1, features = c(list_genes2$gene)) + RotatedAxis()
+FeaturePlot(breast1, features = c(list_genes$gene))
+
+
+
+FeaturePlot(object = breast1, features = c("FOXP3"))
+FeaturePlot(object = breast1, features = c("CD4"))
+FeaturePlot(object = breast1, features = c("CXCR3"))
+FeaturePlot(object = breast1, features = c("ENTPD1"))
+FeaturePlot(object = breast1, features = c("CCR8"))
+FeaturePlot(object = breast1, features = c("CTLA4"))
+FeaturePlot(object = breast1, features = c("IL2RA"))
+FeaturePlot(object = breast1, features = c("IL7R"))
+FeaturePlot(object = breast1, features = c("CXCL13"))
+FeaturePlot(object = breast1, features = c("LEF1"))
+FeaturePlot(object = breast1, features = c("FAM65B"))
+FeaturePlot(object = breast1, features = c("LAYN"))
+```
+
+
+Pseudotime analysis colo
+
+```{r}
+#colo
+DimPlot(object = colo1,label = TRUE )
+cdscolo <- as.cell_data_set(colo1)
+cdscolo <- cluster_cells(cdscolo)
+p1colo <- plot_cells(cdscolo, show_trajectory_graph = FALSE)
+p2colo <- plot_cells(cdscolo, color_cells_by = "partition", show_trajectory_graph = FALSE)
+#wrap_plots(p1, p2)
+integrated.subcolo <- subset(as.Seurat(cdscolo), monocle3_partitions == 1)
+cdscolo <- as.cell_data_set(integrated.subcolo)
+cdscolo <- learn_graph(cdscolo)
+plot_cells(cdscolo, label_groups_by_cluster = TRUE, label_leaves = TRUE, label_branch_points = TRUE)
+max.avp <- which.max(unlist(FetchData(integrated.subcolo, "ident")))
+max.avp <- colnames(integrated.subcolo)[max.avp]
+cdscolo <- order_cells(cdscolo, root_cells = max.avp)
+plot_cells(cdscolo, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+    label_branch_points = FALSE)
+integrated.subcolo <- as.Seurat(cdscolo)
+FeaturePlot(integrated.subcolo, "monocle3_pseudotime")
+VlnPlot(object = colo1, features = c(list_genes$gene), slot = 'counts', log = TRUE)
+
+VlnPlot(object = colo1, features = c(list_genes$gene[1]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[2]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[3]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[4]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[5]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[6]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[7]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[8]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[9]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[10]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[11]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[12]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[13]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[14]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[15]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[16]), slot = 'counts', log = TRUE)
+VlnPlot(object = colo1, features = c(list_genes$gene[17]), slot = 'counts', log = TRUE)
+
+
+FeaturePlot(object = colo1, features = c(list_genes$gene[1]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[2]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[3]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[4]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[5]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[6]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[7]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[8]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[9]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[10]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[11]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[12]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[13]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[14]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[15]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[16]))
+FeaturePlot(object = colo1, features = c(list_genes$gene[17]))
+
+#list_genes2 <- list_genes[-c(14,18,20,21),]
+list_genes2 <- list_genes
+DotPlot(colo1, features = c(list_genes2$gene)) + RotatedAxis()
+FeaturePlot(colo1, features = c(list_genes$gene))
+
+
+
+FeaturePlot(object = colo1, features = c("FOXP3"))
+FeaturePlot(object = colo1, features = c("CD4"))
+FeaturePlot(object = colo1, features = c("CXCR3"))
+FeaturePlot(object = colo1, features = c("ENTPD1"))
+FeaturePlot(object = colo1, features = c("CCR8"))
+FeaturePlot(object = colo1, features = c("CTLA4"))
+FeaturePlot(object = colo1, features = c("IL2RA"))
+FeaturePlot(object = colo1, features = c("IL7R"))
+FeaturePlot(object = colo1, features = c("CXCL13"))
+FeaturePlot(object = colo1, features = c("LEF1"))
+FeaturePlot(object = colo1, features = c("FAM65B"))
+FeaturePlot(object = colo1, features = c("LAYN"))
+```
+
+
+
+
+
+
+
+Pseudo time Liver
+```{r}
+DimPlot(object = liver1,label = TRUE )
+cdsliver <- as.cell_data_set(liver1)
+cdsliver <- cluster_cells(cdsliver)
+p1liver <- plot_cells(cdsliver, show_trajectory_graph = FALSE)
+p2liver <- plot_cells(cdsliver, color_cells_by = "partition", show_trajectory_graph = FALSE)
+#wrap_plots(p1, p2)
+integrated.subliver <- subset(as.Seurat(cdsliver), monocle3_partitions == 1)
+cdsliver <- as.cell_data_set(integrated.subliver)
+cdsliver <- learn_graph(cdsliver)
+plot_cells(cdsliver, label_groups_by_cluster = TRUE, label_leaves = TRUE, label_branch_points = TRUE)
+max.avp <- which.max(unlist(FetchData(integrated.subliver, "ident")))
+max.avp <- colnames(integrated.subliver)[max.avp]
+cdsliver <- order_cells(cdsliver, root_cells = max.avp)
+plot_cells(cdsliver, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+    label_branch_points = FALSE)
+integrated.subliver <- as.Seurat(cdsliver)
+FeaturePlot(integrated.subliver, "monocle3_pseudotime")
+
+
+VlnPlot(object = liver1, features = c(list_genes$gene), slot = 'counts', log = TRUE)
+
+VlnPlot(object = liver1, features = c(list_genes$gene[1]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[2]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[3]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[4]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[5]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[6]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[7]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[8]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[9]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[10]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[11]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[12]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[13]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[14]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[15]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[16]), slot = 'counts', log = TRUE)
+VlnPlot(object = liver1, features = c(list_genes$gene[17]), slot = 'counts', log = TRUE)
+
+
+FeaturePlot(object = liver1, features = c(list_genes$gene[1]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[2]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[3]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[4]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[5]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[6]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[7]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[8]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[9]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[10]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[11]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[12]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[13]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[14]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[15]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[16]))
+FeaturePlot(object = liver1, features = c(list_genes$gene[17]))
+
+#list_genes2 <- list_genes[-c(14,18,20,21),]
+list_genes2 <- list_genes
+DotPlot(liver1, features = c(list_genes2$gene)) + RotatedAxis()
+FeaturePlot(liver1, features = c(list_genes$gene))
+
+
+
+FeaturePlot(object = liver1, features = c("FOXP3"))
+FeaturePlot(object = liver1, features = c("CD4"))
+FeaturePlot(object = liver1, features = c("CXCR3"))
+FeaturePlot(object = liver1, features = c("ENTPD1"))
+FeaturePlot(object = liver1, features = c("CCR8"))
+FeaturePlot(object = liver1, features = c("CTLA4"))
+FeaturePlot(object = liver1, features = c("IL2RA"))
+FeaturePlot(object = liver1, features = c("IL7R"))
+FeaturePlot(object = liver1, features = c("CXCL13"))
+FeaturePlot(object = liver1, features = c("LEF1"))
+FeaturePlot(object = liver1, features = c("FAM65B"))
+FeaturePlot(object = liver1, features = c("LAYN"))
+```
+
+Pseudo time Lung
+```{r}
+DimPlot(object = lung1,label = TRUE )
+cdslung <- as.cell_data_set(lung1)
+cdslung <- cluster_cells(cdslung)
+p1lung <- plot_cells(cdslung, show_trajectory_graph = FALSE)
+p2lung <- plot_cells(cdslung, color_cells_by = "partition", show_trajectory_graph = FALSE)
+#wrap_plots(p1, p2)
+integrated.sublung <- subset(as.Seurat(cdslung), monocle3_partitions == 1)
+cdslung <- as.cell_data_set(integrated.sublung)
+cdslung <- learn_graph(cdslung)
+plot_cells(cdslung, label_groups_by_cluster = TRUE, label_leaves = TRUE, label_branch_points = TRUE)
+max.avp <- which.max(unlist(FetchData(integrated.sublung, "ident")))
+max.avp <- colnames(integrated.sublung)[max.avp]
+cdslung <- order_cells(cdslung, root_cells = max.avp)
+plot_cells(cdslung, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+    label_branch_points = FALSE)
+integrated.sublung <- as.Seurat(cdslung)
+FeaturePlot(integrated.sublung, "monocle3_pseudotime")
+
+
+VlnPlot(object = lung1, features = c(list_genes$gene), slot = 'counts', log = TRUE)
+
+VlnPlot(object = lung1, features = c(list_genes$gene[1]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[2]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[3]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[4]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[5]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[6]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[7]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[8]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[9]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[10]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[11]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[12]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[13]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[14]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[15]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[16]), slot = 'counts', log = TRUE)
+VlnPlot(object = lung1, features = c(list_genes$gene[17]), slot = 'counts', log = TRUE)
+
+
+FeaturePlot(object = lung1, features = c(list_genes$gene[1]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[2]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[3]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[4]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[5]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[6]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[7]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[8]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[9]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[10]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[11]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[12]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[13]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[14]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[15]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[16]))
+FeaturePlot(object = lung1, features = c(list_genes$gene[17]))
+
+#list_genes2 <- list_genes[-c(14,18,20,21),]
+list_genes2 <- list_genes
+DotPlot(lung1, features = c(list_genes2$gene)) + RotatedAxis()
+FeaturePlot(lung1, features = c(list_genes$gene))
+
+
+
+FeaturePlot(object = lung1, features = c("FOXP3"))
+FeaturePlot(object = lung1, features = c("CD4"))
+FeaturePlot(object = lung1, features = c("CXCR3"))
+FeaturePlot(object = lung1, features = c("ENTPD1"))
+FeaturePlot(object = lung1, features = c("CCR8"))
+FeaturePlot(object = lung1, features = c("CTLA4"))
+FeaturePlot(object = lung1, features = c("IL2RA"))
+FeaturePlot(object = lung1, features = c("IL7R"))
+FeaturePlot(object = lung1, features = c("CXCL13"))
+FeaturePlot(object = lung1, features = c("LEF1"))
+FeaturePlot(object = lung1, features = c("FAM65B"))
+FeaturePlot(object = lung1, features = c("LAYN"))
+
+```
+
+Pseudo timepanc
+```{r}
+DimPlot(object = panc1,label = TRUE )
+cdspanc <- as.cell_data_set(panc1)
+cdspanc <- cluster_cells(cdspanc)
+p1panc <- plot_cells(cdspanc, show_trajectory_graph = FALSE)
+p2panc <- plot_cells(cdspanc, color_cells_by = "partition", show_trajectory_graph = FALSE)
+#wrap_plots(p1, p2)
+integrated.subpanc <- subset(as.Seurat(cdspanc), monocle3_partitions == 1)
+cdspanc <- as.cell_data_set(integrated.subpanc)
+cdspanc <- learn_graph(cdspanc)
+plot_cells(cdspanc, label_groups_by_cluster = TRUE, label_leaves = TRUE, label_branch_points = TRUE)
+max.avp <- which.max(unlist(FetchData(integrated.subpanc, "ident")))
+max.avp <- colnames(integrated.subpanc)[max.avp]
+cdspanc <- order_cells(cdspanc, root_cells = max.avp)
+plot_cells(cdspanc, color_cells_by = "pseudotime", label_cell_groups = FALSE, label_leaves = FALSE, 
+    label_branch_points = FALSE)
+integrated.subpanc <- as.Seurat(cdspanc)
+FeaturePlot(integrated.subpanc, "monocle3_pseudotime")
+
+
+
+VlnPlot(object = panc1, features = c(list_genes$gene), slot = 'counts', log = TRUE)
+
+VlnPlot(object = panc1, features = c(list_genes$gene[1]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[2]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[3]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[4]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[5]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[6]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[7]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[8]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[9]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[10]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[11]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[12]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[13]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[14]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[15]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[16]), slot = 'counts', log = TRUE)
+VlnPlot(object = panc1, features = c(list_genes$gene[17]), slot = 'counts', log = TRUE)
+
+
+FeaturePlot(object = panc1, features = c(list_genes$gene[1]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[2]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[3]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[4]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[5]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[6]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[7]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[8]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[9]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[10]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[11]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[12]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[13]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[14]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[15]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[16]))
+FeaturePlot(object = panc1, features = c(list_genes$gene[17]))
+
+#list_genes2 <- list_genes[-c(14,18,20,21),]
+list_genes2 <- list_genes
+DotPlot(panc1, features = c(list_genes2$gene)) + RotatedAxis()
+FeaturePlot(panc1, features = c(list_genes$gene))
+
+
+
+FeaturePlot(object = panc1, features = c("FOXP3"))
+FeaturePlot(object = panc1, features = c("CD4"))
+FeaturePlot(object = panc1, features = c("CXCR3"))
+FeaturePlot(object = panc1, features = c("ENTPD1"))
+FeaturePlot(object = panc1, features = c("CCR8"))
+FeaturePlot(object = panc1, features = c("CTLA4"))
+FeaturePlot(object = panc1, features = c("IL2RA"))
+FeaturePlot(object = panc1, features = c("IL7R"))
+FeaturePlot(object = panc1, features = c("CXCL13"))
+FeaturePlot(object = panc1, features = c("LEF1"))
+FeaturePlot(object = panc1, features = c("FAM65B"))
+FeaturePlot(object = panc1, features = c("LAYN"))
+
+```
+
+
+
+Panctreatic top genes analysis
+
+```{r}
+FeaturePlot(object = both, features = c("FAM65B"))
+FeaturePlot(object = panc1, features = c("FOS"))
+
+FeaturePlot(object = panc1, features = c("COL1A1"))
+FeaturePlot(object = panc1, features = c("COL1A2"))
+
+FeaturePlot(object = panc1, features = c("COL3A1"))
+# Cluster 3
+FeaturePlot(object = both1, features = c("IGLL5"))
+FeaturePlot(object = both1, features = c("EEF1A1"))
+FeaturePlot(object = both1, features = c("INS"))
+FeaturePlot(object = both1, features = c("RPL9"))
+FeaturePlot(object = both1, features = c("RPS27"))
+FeaturePlot(object = both1, features = c("RPS29"))
+FeaturePlot(object = both1, features = c("RPS3A"))
+FeaturePlot(object = both1, features = c("RPL36A"))
+FeaturePlot(object = both1, features = c("MT-CO3"))
+FeaturePlot(object = both1, features = c("RPL21"))
+FeaturePlot(object = both1, features = c("MT-ND2"))
+FeaturePlot(object = both1, features = c("RPL39"))
+FeaturePlot(object = both1, features = c("TMEM66"))
+FeaturePlot(object = both1, features = c("RPL41"))
+FeaturePlot(object = both1, features = c("MT-CO2"))
+FeaturePlot(object = both1, features = c("RPL37"))
+FeaturePlot(object = both1, features = c("RPL28"))
+FeaturePlot(object = both1, features = c("RPL7"))
+FeaturePlot(object = both1, features = c("RPL18A"))
+
+
+#cluster 16
+
+
+
+
+
+
+
+
+
+
+
+```
+#Cluster 16
+```{r}
+FeaturePlot(object = both1, features = c("IGJ"))
+FeaturePlot(object = both1, features = c("IGLL5"))
+FeaturePlot(object = both1, features = c("MZB1"))
+FeaturePlot(object = both1, features = c("INS"))
+FeaturePlot(object = both1, features = c("DERL3"))
+FeaturePlot(object = both1, features = c("PPY"))
+FeaturePlot(object = both1, features = c("IGFBP7"))
+FeaturePlot(object = both1, features = c("SPP1"))
+FeaturePlot(object = both1, features = c("APOE"))
+FeaturePlot(object = both1, features = c("COL1A1"))
+FeaturePlot(object = both1, features = c("COL1A2"))
+FeaturePlot(object = both1, features = c("COL3A1"))
+FeaturePlot(object = both1, features = c("CD79A"))
+FeaturePlot(object = both1, features = c("PRDX4"))
+FeaturePlot(object = both1, features = c("CST3"))
+FeaturePlot(object = both1, features = c("MGP"))
+FeaturePlot(object = both1, features = c("FKBP2"))
+FeaturePlot(object = both1, features = c("SSR4"))
+FeaturePlot(object = both1, features = c("XBP1"))
+FeaturePlot(object = both1, features = c("FKBP11"))
+
+
+
+
+
+
+#saveRDS(both, file = "../output/Sc_tcellV24.rds")
+```
+
+```{r}
+VlnPlot(object = both1, features = c("CXCR3"))
+VlnPlot(object = breast1, features = c("CXCR3"))
+VlnPlot(object = colo1, features = c("CXCR3"))
+VlnPlot(object = liver1, features = c("CXCR3"))
+VlnPlot(object = lung1, features = c("CXCR3"))
+VlnPlot(object = panc1, features = c("CXCR3"))
+FeaturePlot(object = both1, features = c("CXCR3"))
+FeaturePlot(object = breast1, features = c("CXCR3"))
+FeaturePlot(object = colo1, features = c("CXCR3"))
+FeaturePlot(object = liver1, features = c("CXCR3"))
+FeaturePlot(object = lung1, features = c("CXCR3"))
+FeaturePlot(object = panc1, features = c("CXCR3"))
+
+
+VlnPlot(object = both1, features = c("FAM65B"))
+VlnPlot(object = breast1, features = c("FAM65B"))
+VlnPlot(object = colo1, features = c("FAM65B"))
+VlnPlot(object = liver1, features = c("FAM65B"))
+VlnPlot(object = lung1, features = c("FAM65B"))
+VlnPlot(object = panc1, features = c("FAM65B"))
+FeaturePlot(object = both1, features = c("FAM65B"))
+FeaturePlot(object = breast1, features = c("FAM65B"))
+FeaturePlot(object = colo1, features = c("FAM65B"))
+FeaturePlot(object = liver1, features = c("FAM65B"))
+FeaturePlot(object = lung1, features = c("FAM65B"))
+FeaturePlot(object = panc1, features = c("FAM65B"))
+
+VlnPlot(object = both1, features = c("CCR8"))
+VlnPlot(object = breast1, features = c("CCR8"))
+VlnPlot(object = colo1, features = c("CCR8"))
+VlnPlot(object = liver1, features = c("CCR8"))
+VlnPlot(object = lung1, features = c("CCR8"))
+VlnPlot(object = panc1, features = c("CCR8"))
+FeaturePlot(object = both1, features = c("CCR8"))
+FeaturePlot(object = breast1, features = c("CCR8"))
+FeaturePlot(object = colo1, features = c("CCR8"))
+FeaturePlot(object = liver1, features = c("CCR8"))
+FeaturePlot(object = lung1, features = c("CCR8"))
+FeaturePlot(object = panc1, features = c("CCR8"))
+
+
+
+VlnPlot(object = both1, features = c("FOXP3"))
+VlnPlot(object = breast1, features = c("FOXP3"))
+VlnPlot(object = colo1, features = c("FOXP3"))
+VlnPlot(object = liver1, features = c("FOXP3"))
+VlnPlot(object = lung1, features = c("FOXP3"))
+VlnPlot(object = panc1, features = c("FOXP3"))
+FeaturePlot(object = both1, features = c("FOXP3"))
+FeaturePlot(object = breast1, features = c("FOXP3"))
+FeaturePlot(object = colo1, features = c("FOXP3"))
+FeaturePlot(object = liver1, features = c("FOXP3"))
+FeaturePlot(object = lung1, features = c("FOXP3"))
+FeaturePlot(object = panc1, features = c("FOXP3"))
+
+
+VlnPlot(object = both1, features = c("IL2RA"))
+VlnPlot(object = breast1, features = c("IL2RA"))
+VlnPlot(object = colo1, features = c("IL2RA"))
+VlnPlot(object = liver1, features = c("IL2RA"))
+VlnPlot(object = lung1, features = c("IL2RA"))
+VlnPlot(object = panc1, features = c("IL2RA"))
+FeaturePlot(object = both1, features = c("IL2RA"))
+FeaturePlot(object = breast1, features = c("IL2RA"))
+FeaturePlot(object = colo1, features = c("IL2RA"))
+FeaturePlot(object = liver1, features = c("IL2RA"))
+FeaturePlot(object = lung1, features = c("IL2RA"))
+FeaturePlot(object = panc1, features = c("IL2RA"))
+
+
+
+
+VlnPlot(object = both1, features = c("RPS17"))
+VlnPlot(object = breast1, features = c("RPS17"))
+VlnPlot(object = colo1, features = c("RPS17"))
+VlnPlot(object = liver1, features = c("RPS17"))
+VlnPlot(object = lung1, features = c("RPS17"))
+VlnPlot(object = panc1, features = c("RPS17"))
+FeaturePlot(object = both1, features = c("RPS17"))
+FeaturePlot(object = breast1, features = c("RPS17"))
+FeaturePlot(object = colo1, features = c("RPS17"))
+FeaturePlot(object = liver1, features = c("RPS17"))
+FeaturePlot(object = lung1, features = c("RPS17"))
+FeaturePlot(object = panc1, features = c("RPS17"))
+
+
+
+VlnPlot(object = both1, features = c("FGFBP2"))
+VlnPlot(object = breast1, features = c("FGFBP2"))
+VlnPlot(object = colo1, features = c("FGFBP2"))
+VlnPlot(object = liver1, features = c("FGFBP2"))
+VlnPlot(object = lung1, features = c("FGFBP2"))
+VlnPlot(object = panc1, features = c("FGFBP2"))
+FeaturePlot(object = both1, features = c("FGFBP2"))
+FeaturePlot(object = breast1, features = c("FGFBP2"))
+FeaturePlot(object = colo1, features = c("FGFBP2"))
+FeaturePlot(object = liver1, features = c("FGFBP2"))
+FeaturePlot(object = lung1, features = c("FGFBP2"))
+FeaturePlot(object = panc1, features = c("FGFBP2"))
+
+
+
+VlnPlot(object = both1, features = c("FAM65B"))
+VlnPlot(object = breast1, features = c("FAM65B"))
+VlnPlot(object = colo1, features = c("FAM65B"))
+VlnPlot(object = liver1, features = c("FAM65B"))
+VlnPlot(object = lung1, features = c("FAM65B"))
+VlnPlot(object = panc1, features = c("FAM65B"))
+FeaturePlot(object = both1, features = c("FAM65B"))
+FeaturePlot(object = breast1, features = c("FAM65B"))
+FeaturePlot(object = colo1, features = c("FAM65B"))
+FeaturePlot(object = liver1, features = c("FAM65B"))
+FeaturePlot(object = lung1, features = c("FAM65B"))
+FeaturePlot(object = panc1, features = c("FAM65B"))
+
+
+
+VlnPlot(object = both1, features = c("TNFRSF4"))
+VlnPlot(object = breast1, features = c("TNFRSF4"))
+VlnPlot(object = colo1, features = c("TNFRSF4"))
+VlnPlot(object = liver1, features = c("TNFRSF4"))
+VlnPlot(object = lung1, features = c("TNFRSF4"))
+VlnPlot(object = panc1, features = c("TNFRSF4"))
+FeaturePlot(object = both1, features = c("TNFRSF4"))
+FeaturePlot(object = breast1, features = c("TNFRSF4"))
+FeaturePlot(object = colo1, features = c("TNFRSF4"))
+FeaturePlot(object = liver1, features = c("TNFRSF4"))
+FeaturePlot(object = lung1, features = c("TNFRSF4"))
+FeaturePlot(object = panc1, features = c("TNFRSF4"))
+
+
+VlnPlot(object = both1, features = c("GZMK"))
+VlnPlot(object = breast1, features = c("GZMK"))
+VlnPlot(object = colo1, features = c("GZMK"))
+VlnPlot(object = liver1, features = c("GZMK"))
+VlnPlot(object = lung1, features = c("GZMK"))
+VlnPlot(object = panc1, features = c("GZMK"))
+FeaturePlot(object = both1, features = c("GZMK"))
+FeaturePlot(object = breast1, features = c("GZMK"))
+FeaturePlot(object = colo1, features = c("GZMK"))
+FeaturePlot(object = liver1, features = c("GZMK"))
+FeaturePlot(object = lung1, features = c("GZMK"))
+FeaturePlot(object = panc1, features = c("GZMK"))
+
+
+
+VlnPlot(object = both1, features = c("NR4A2"))
+VlnPlot(object = breast1, features = c("NR4A2"))
+VlnPlot(object = colo1, features = c("NR4A2"))
+VlnPlot(object = liver1, features = c("NR4A2"))
+VlnPlot(object = lung1, features = c("NR4A2"))
+VlnPlot(object = panc1, features = c("NR4A2"))
+FeaturePlot(object = both1, features = c("NR4A2"))
+FeaturePlot(object = breast1, features = c("NR4A2"))
+FeaturePlot(object = colo1, features = c("NR4A2"))
+FeaturePlot(object = liver1, features = c("NR4A2"))
+FeaturePlot(object = lung1, features = c("NR4A2"))
+FeaturePlot(object = panc1, features = c("NR4A2"))
+
+
+
+VlnPlot(object = both1, features = c("HLA-A"))
+VlnPlot(object = breast1, features = c("HLA-A"))
+VlnPlot(object = colo1, features = c("HLA-A"))
+VlnPlot(object = liver1, features = c("HLA-A"))
+VlnPlot(object = lung1, features = c("HLA-A"))
+VlnPlot(object = panc1, features = c("HLA-A"))
+FeaturePlot(object = both1, features = c("HLA-A"))
+FeaturePlot(object = breast1, features = c("HLA-A"))
+FeaturePlot(object = colo1, features = c("HLA-A"))
+FeaturePlot(object = liver1, features = c("HLA-A"))
+FeaturePlot(object = lung1, features = c("HLA-A"))
+FeaturePlot(object = panc1, features = c("HLA-A"))
+
+VlnPlot(object = both1, features = c("HLA-B"))
+VlnPlot(object = breast1, features = c("HLA-B"))
+VlnPlot(object = colo1, features = c("HLA-B"))
+VlnPlot(object = liver1, features = c("HLA-B"))
+VlnPlot(object = lung1, features = c("HLA-B"))
+VlnPlot(object = panc1, features = c("HLA-B"))
+FeaturePlot(object = both1, features = c("HLA-B"))
+FeaturePlot(object = breast1, features = c("HLA-B"))
+FeaturePlot(object = colo1, features = c("HLA-B"))
+FeaturePlot(object = liver1, features = c("HLA-B"))
+FeaturePlot(object = lung1, features = c("HLA-B"))
+FeaturePlot(object = panc1, features = c("HLA-B"))
+
+
+
+
+VlnPlot(object = both1, features = c("HLA-C"))
+VlnPlot(object = breast1, features = c("HLA-C"))
+VlnPlot(object = colo1, features = c("HLA-C"))
+VlnPlot(object = liver1, features = c("HLA-C"))
+VlnPlot(object = lung1, features = c("HLA-C"))
+VlnPlot(object = panc1, features = c("HLA-C"))
+FeaturePlot(object = both1, features = c("HLA-C"))
+FeaturePlot(object = breast1, features = c("HLA-C"))
+FeaturePlot(object = colo1, features = c("HLA-C"))
+FeaturePlot(object = liver1, features = c("HLA-C"))
+FeaturePlot(object = lung1, features = c("HLA-C"))
+FeaturePlot(object = panc1, features = c("HLA-C"))
+
+
+VlnPlot(object = both1, features = c("HLA-E"))
+VlnPlot(object = breast1, features = c("HLA-E"))
+VlnPlot(object = colo1, features = c("HLA-E"))
+VlnPlot(object = liver1, features = c("HLA-E"))
+VlnPlot(object = lung1, features = c("HLA-E"))
+VlnPlot(object = panc1, features = c("HLA-E"))
+FeaturePlot(object = both1, features = c("HLA-E"))
+FeaturePlot(object = breast1, features = c("HLA-E"))
+FeaturePlot(object = colo1, features = c("HLA-E"))
+FeaturePlot(object = liver1, features = c("HLA-E"))
+FeaturePlot(object = lung1, features = c("HLA-E"))
+FeaturePlot(object = panc1, features = c("HLA-E"))
+
+
+VlnPlot(object = both1, features = c("HLA-DRB1"))
+VlnPlot(object = breast1, features = c("HLA-DRB1"))
+VlnPlot(object = colo1, features = c("HLA-DRB1"))
+VlnPlot(object = liver1, features = c("HLA-DRB1"))
+VlnPlot(object = lung1, features = c("HLA-DRB1"))
+VlnPlot(object = panc1, features = c("HLA-DRB1"))
+FeaturePlot(object = both1, features = c("HLA-DRB1"))
+FeaturePlot(object = breast1, features = c("HLA-DRB1"))
+FeaturePlot(object = colo1, features = c("HLA-DRB1"))
+FeaturePlot(object = liver1, features = c("HLA-DRB1"))
+FeaturePlot(object = lung1, features = c("HLA-DRB1"))
+FeaturePlot(object = panc1, features = c("HLA-DRB1"))
+
+VlnPlot(object = both1, features = c("IGLL5"))
+VlnPlot(object = breast1, features = c("IGLL5"))
+VlnPlot(object = colo1, features = c("IGLL5"))
+VlnPlot(object = liver1, features = c("IGLL5"))
+VlnPlot(object = lung1, features = c("IGLL5"))
+VlnPlot(object = panc1, features = c("IGLL5"))
+FeaturePlot(object = both1, features = c("IGLL5"))
+FeaturePlot(object = breast1, features = c("IGLL5"))
+FeaturePlot(object = colo1, features = c("IGLL5"))
+FeaturePlot(object = liver1, features = c("IGLL5"))
+FeaturePlot(object = lung1, features = c("IGLL5"))
+FeaturePlot(object = panc1, features = c("IGLL5"))
+
+VlnPlot(object = both1, features = c("FOS"))
+VlnPlot(object = breast1, features = c("FOS"))
+VlnPlot(object = colo1, features = c("FOS"))
+VlnPlot(object = liver1, features = c("FOS"))
+VlnPlot(object = lung1, features = c("FOS"))
+VlnPlot(object = panc1, features = c("FOS"))
+FeaturePlot(object = both1, features = c("FOS"))
+FeaturePlot(object = breast1, features = c("FOS"))
+FeaturePlot(object = colo1, features = c("FOS"))
+FeaturePlot(object = liver1, features = c("FOS"))
+FeaturePlot(object = lung1, features = c("FOS"))
+FeaturePlot(object = panc1, features = c("FOS"))
+
+VlnPlot(object = both1, features = c("IGJ"))
+VlnPlot(object = breast1, features = c("IGJ"))
+VlnPlot(object = colo1, features = c("IGJ"))
+VlnPlot(object = liver1, features = c("IGJ"))
+VlnPlot(object = lung1, features = c("IGJ"))
+VlnPlot(object = panc1, features = c("IGJ"))
+FeaturePlot(object = both1, features = c("IGJ"))
+FeaturePlot(object = breast1, features = c("IGJ"))
+FeaturePlot(object = colo1, features = c("IGJ"))
+FeaturePlot(object = liver1, features = c("IGJ"))
+FeaturePlot(object = lung1, features = c("IGJ"))
+FeaturePlot(object = panc1, features = c("IGJ"))
+
+
+VlnPlot(object = both1, features = c("CTLA4"))
+VlnPlot(object = breast1, features = c("CTLA4"))
+VlnPlot(object = colo1, features = c("CTLA4"))
+VlnPlot(object = liver1, features = c("CTLA4"))
+VlnPlot(object = lung1, features = c("CTLA4"))
+VlnPlot(object = panc1, features = c("CTLA4"))
+FeaturePlot(object = both1, features = c("CTLA4"))
+FeaturePlot(object = breast1, features = c("CTLA4"))
+FeaturePlot(object = colo1, features = c("CTLA4"))
+FeaturePlot(object = liver1, features = c("CTLA4"))
+FeaturePlot(object = lung1, features = c("CTLA4"))
+FeaturePlot(object = panc1, features = c("CTLA4"))
+
+
+VlnPlot(object = both1, features = c("HLA-E"))
+VlnPlot(object = breast1, features = c("HLA-E"))
+VlnPlot(object = colo1, features = c("HLA-E"))
+VlnPlot(object = liver1, features = c("HLA-E"))
+VlnPlot(object = lung1, features = c("HLA-E"))
+VlnPlot(object = panc1, features = c("HLA-E"))
+FeaturePlot(object = both1, features = c("HLA-E"))
+FeaturePlot(object = breast1, features = c("HLA-E"))
+FeaturePlot(object = colo1, features = c("HLA-E"))
+FeaturePlot(object = liver1, features = c("HLA-E"))
+FeaturePlot(object = lung1, features = c("HLA-E"))
+FeaturePlot(object = panc1, features = c("HLA-E"))
+```
+
+
+
+
+
+
+
