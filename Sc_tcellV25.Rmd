@@ -20,11 +20,6 @@ knitr::opts_chunk$set(
 
 ### Setup the Seurat Object
 
-For this tutorial, we will be analyzing the a dataset of Peripheral Blood Mononuclear Cells (PBMC) freely available from 10X Genomics. There are 2,700 single cells that were sequenced on the Illumina NextSeq 500. The raw data can be found [here](https://s3-us-west-2.amazonaws.com/10x.files/samples/cell/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz).
-
-We start by reading in the data. The `Read10X` function reads in the output of the [cellranger](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/what-is-cell-ranger) pipeline from 10X, returning a unique molecular identified (UMI) count matrix. The values in this matrix represent the number of molecules for each feature (i.e. gene; row) that are detected in each cell (column).
-
-We next use the count matrix to create a `Seurat` object. The object serves as a container that contains both data (like the count matrix) and analysis (like PCA, or clustering results) for a single-cell dataset. For a technical discussion of the `Seurat` object structure, check out our [GitHub Wiki](https://github.com/satijalab/seurat/wiki). For example, the count matrix is stored in `pbmc[["RNA"]]@counts`.
 
 ```{r init}
 library(monocle3)
@@ -219,24 +214,6 @@ DimPlot(object = panc1,label = TRUE )
 write.csv(panc1$seurat_clusters, file ="panc.csv")
 
 
-#hcabm40k <- SplitObject(both, split.by = "type")
-#for (i in seq_along(hcabm40k)) {
- #   hcabm40k[[i]] <- NormalizeData(hcabm40k[[i]]) %>% FindVariableFeatures()
-#}
-#features <- SelectIntegrationFeatures(hcabm40k)
-#for (i in seq_along(along.with = hcabm40k)) {
- #   hcabm40k[[i]] <- ScaleData(hcabm40k[[i]], features = features) %>% RunPCA(features = features)
-#}
-#anchors <- FindIntegrationAnchors(hcabm40k, reference = 1, reduction = "rpca", dims = 1:30)
-#integrated <- IntegrateData(anchors, dims = 1:30)
-#integrated <- ScaleData(integrated)
-#integrated <- RunPCA(integrated)
-#integrated <- RunUMAP(integrated, dims = 1:30, reduction.name = "UMAP")
-#integrated <- FindNeighbors(integrated, dims = 1:30)
-#integrated <- FindClusters(integrated)
-#DimPlot(integrated, group.by = c("type", "ident"))
-#DimPlot(integrated, group.by = c("seurat_clusters"))
-# BOth
 
 cds <- as.cell_data_set(both)
 cds <- cluster_cells(cds)
