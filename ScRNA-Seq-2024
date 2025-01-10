@@ -1,0 +1,91 @@
+# Load required libraries
+library(Seurat)
+library(SeuratWrappers)
+library(monocle3)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+
+# Step 1: Load and Process Datasets
+# Replace file paths with your actual dataset paths
+datasets <- list(
+  "breast" = Read10X(data.dir = "path_to_breast_data"),
+  "colorectal" = Read10X(data.dir = "path_to_colorectal_data"),
+  "liver" = Read10X(data.dir = "path_to_liver_data"),
+  "lung" = Read10X(data.dir = "path_to_lung_data"),
+  "pancreatic" = Read10X(data.dir = "path_to_pancreatic_data")
+)
+
+seurat_objects <- lapply(names(datasets), function(name) {
+  CreateSeuratObject(counts = datasets[[name]], project = name, min.cells = 3, min.features = 200)
+})
+
+# Add metadata to distinguish datasets
+for (name in names(seurat_objects)) {
+  seurat_objects[[name]]$type <- name
+}
+
+# Step 2: Merge and Preprocess Data
+combined <- merge(
+  seurat_objects[[1]], 
+  y = seurat_objects[-1], 
+  add.cell.ids = names(seurat_objects), 
+  project = "Integrated_T_Cell_Analysis"
+)
+
+# Quality control
+combined <- subset(combined, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 10)
+combined <- NormalizeData(combined)
+combined <- FindVariableFeatures(combined, selection.method = "vst", nfeatures = 2000)
+combined <- ScaleData(combined)
+combined <- RunPCA(combined)
+
+# Step 3: Integration Using Harmony
+library(harmony)
+combined <- RunHarmony(combined, group.by.vars = "type")
+combined <- RunUMAP(combined, reduction = "harmony", dims = 1:30)
+combined <- FindNeighbors(combined, dims = 1:30)
+combined <- FindClusters(combined, resolution = 0.5)
+
+# Visualize Clustering
+DimPlot(combined, reduction = "umap", label = TRUE, group.by = "type") + NoLegend()
+
+# Step 4: Differential Expression Analysis
+markers <- FindAllMarkers(combined, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+write.csv(markers, "markers_all_clusters.csv")
+
+# Step 5: Pseudotime Analysis with Monocle3
+cds <- as.cell_data_set(combined)
+cds <- cluster_cells(cds)
+cds <- learn_graph(cds)
+cds <- order_cells(cds)
+
+# Pseudotime Visualization
+plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = TRUE)
+
+# Step 6: Dataset-Specific Subset Analysis
+for (name in names(seurat_objects)) {
+  subset_data <- subset(combined, subset = type == name)
+  DimPlot(subset_data, label = TRUE) + ggtitle(paste("UMAP for", name, "Dataset"))
+  
+  # Convert to Monocle for pseudotime
+  cds_subset <- as.cell_data_set(subset_data)
+  cds_subset <- cluster_cells(cds_subset)
+  cds_subset <- learn_graph(cds_subset)
+  cds_subset <- order_cells(cds_subset)
+  
+  # Visualize Pseudotime
+  plot_cells(cds_subset, color_cells_by = "pseudotime", label_groups_by_cluster = TRUE)
+}
+
+# Step 7: Feature Plots for Genes of Interest
+genes_of_interest <- c("CTLA4", "PD1", "CXCR3", "FOXP3", "IL2RA", "HLA-A", "FGFBP2")
+FeaturePlot(combined, features = genes_of_interest)
+
+# Step 8: Violin Plots for Gene Expression
+for (gene in genes_of_interest) {
+  VlnPlot(combined, features = gene, group.by = "type", log = TRUE)
+}
+
+# Save Final Seurat Object
+saveRDS(combined, file = "Integrated_T_Cell_Analysis.rds")
